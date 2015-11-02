@@ -70,20 +70,20 @@ func report(w http.ResponseWriter, r *http.Request) {
 
 	// Send the email report
 	msg := &mail.Message {
-		Sender:  "Charlie Nevill <charles.nevill@gmail.com>",
+		Sender:  "charles.nevill@gmail.com",
 		To:      []string{"charles.nevill@gmail.com"},
-		Subject: "eGuauge daily summary",
+		Subject: "eGauge daily summary",
 		Body:    fmt.Sprintf(reportMessage, used, generated),
 	}
 	if err := mail.Send(c, msg); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	fmt.Fprintf(w, "Sent notification email too!\n")
+	fmt.Fprintf(w, "Sent notification email too!\n\n%v\n", msg.Body)
 }
 
 const reportMessage = `
 eGauge usage for yesterday:
-Used: %s
-Generated: %s
+Used: %.2f kWh
+Generated: %.2f kWh
 `

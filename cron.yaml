@@ -1,4 +1,4 @@
 cron:
 - description: check egauge numbers
   url: /report
-  schedule: every 24 hours
+  schedule: every day 01:00
