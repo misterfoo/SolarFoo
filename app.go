@@ -19,6 +19,8 @@ func init() {
 func report(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 	client := urlfetch.Client(c)
+	
+	w.Header().Set("Content-Type", "text/plain")
 
 	// Get the timestamp of midnight today, so we can calculate the energy used yesterday
 	year, month, day := time.Now().Date()
