@@ -79,7 +79,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	fmt.Fprintf(w, "Sent notification email too!\n\n%v\n", msg.Body)
+	fmt.Fprintf(w, "Sent notification email saying:\n%v\n", msg.Body)
 }
 
 const reportMessage = `
