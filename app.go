@@ -64,7 +64,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "Used: %v\n", used)
-	fmt.Fprintf(w, "Geneated: %v\n", generated)
+	fmt.Fprintf(w, "Generated: %v\n", generated)
 
 	// Send the email report
 	msg := &mail.Message {
@@ -77,6 +77,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
+	fmt.Fprintf(w, "Sent notification email too!\n")
 }
 
 const reportMessage = `
