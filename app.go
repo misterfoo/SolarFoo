@@ -40,11 +40,16 @@ func report(w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.URL.Query()["email"]; ok {
 		email = true
 	}
+	
+	bareUrl := r.URL
+	bareUrl.RawQuery = "" 
 
+	// Setup the page header
 	w.Header().Set("Content-Type", "text/html")
 	output := new(bytes.Buffer)
+	fmt.Fprint(output, "<html><body>")
 	fmt.Fprintf(output, "<style type='text/css'>p { font-family: arial; }</style>")
-	fmt.Fprint(output, "<p>")
+	fmt.Fprint(output, "<p align='center'>")
 
 	// Get the timestamp of midnight today, so we can calculate the energy used yesterday
 	year, month, day := time.Now().Date()
@@ -59,23 +64,37 @@ func report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read all the points from the API query
+	// Read all the points from eGauge and print the header
 	totals, points := readValues(w, resp)
+	fmt.Fprintf(output, "Used: %.2f kWh<br/>\n", totals.used)
+	fmt.Fprintf(output, "Generated: %.2f kWh<br/>\n", totals.generated)
+	fmt.Fprintf(output, "<a href='%v'>Full Report</a><br/>\n", bareUrl)
+	fmt.Fprint(output, "<br/>")
+	fmt.Fprint(output, "</p>")
+
+	// Process the individual points for inclusion
 	sort.Sort(ByTime(points))
+	jsonPoints := new(bytes.Buffer)
+	details := new(bytes.Buffer)
 	for _, point := range points {
-		fmt.Fprintf(output, "%v: %.2f, %.2f<br/>\n", point.time, point.used, point.generated)
+		fmt.Fprintf(details, "%v: %.2f, %.2f<br/>\n", point.time.Format("2006 Jan 2 15:04"), point.used, point.generated)
+		fmt.Fprintf(jsonPoints, "[{v: [%v, 0, 0], f: '%v'}, %v, %v],\n",
+			point.time.Hour(), point.time.Format("03:04"), point.used, point.generated)
 	}
 
-	// Dump the summary for the day
-	fmt.Fprintf(output, "Used: %.2f<br/>\n", totals.used)
-	fmt.Fprintf(output, "Generated: %.2f<br/>\n", totals.generated)
-
 	// Generate the chart form of the results
-	code := strings.Replace(chartCode, "$(points)", "foo", 1)
+	code := strings.Replace(chartCode, "$(points)", jsonPoints.String(), 1)
 	fmt.Fprint(output, code)
+	fmt.Fprint(output, "<br/>")
 
-	// Finish the output form.
+	// Write the full details.
+	fmt.Fprint(output, "<p align='center'>")
+	fmt.Fprint(output, "Details by hour:<br/>\n")
+	fmt.Fprint(output, details.String())
 	fmt.Fprint(output, "</p>")
+
+	// Finish the output.
+	fmt.Fprint(output, "</body></html>")
 
 	final := output.String()
 
@@ -99,10 +118,12 @@ func report(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Reads the raw point data from the eGauge API into a set of DataPoint structures and a 'totals' structure
 func readValues(w http.ResponseWriter, resp *http.Response) (DataPoint, []DataPoint) {
 
 	var totals DataPoint
 	points := make([]DataPoint, 0, 100)
+	zone := time.FixedZone("Austin", -6 * 60 * 60)
 
 	reader := csv.NewReader(resp.Body)
 	reader.FieldsPerRecord = 6
@@ -121,7 +142,7 @@ func readValues(w http.ResponseWriter, resp *http.Response) (DataPoint, []DataPo
 		}
 
 		ts, _ := strconv.Atoi(record[0])
-		timestamp := time.Unix(int64(ts), 0)
+		timestamp := time.Unix(int64(ts), 0).In(zone)
 
 		u, _ := strconv.ParseFloat(record[1], 32)
 		g, _ := strconv.ParseFloat(record[2], 32)
@@ -137,38 +158,44 @@ func readValues(w http.ResponseWriter, resp *http.Response) (DataPoint, []DataPo
 const chartCode = `
   <script type="text/javascript" src="https://www.google.com/jsapi"></script>
   <div id="chart_div"></div>
-  <script language="">
+  <script type='text/javascript'>
+//<![CDATA[
 google.load('visualization', '1', {packages: ['corechart', 'bar']});
 google.setOnLoadCallback(drawColColors);
 
 function drawColColors() {
       var data = new google.visualization.DataTable();
       data.addColumn('timeofday', 'Time of Day');
-      data.addColumn('number', 'Motivation Level');
-      data.addColumn('number', 'Energy Level');
+      data.addColumn('number', 'Used');
+      data.addColumn('number', 'Generated');
 
       data.addRows([
         $(points)
       ]);
 
       var options = {
-        title: 'Motivation and Energy Level Throughout the Day',
+        title: 'Usage and Solar Generation',
         colors: ['#9575cd', '#33ac71'],
+		chartArea: {width:'80%',height:100},
         hAxis: {
           title: 'Time of Day',
           format: 'h:mm a',
           viewWindow: {
-            min: [5, 30, 0],
-            max: [17, 30, 0]
+            min: [0, 0, 0],
+            max: [23, 59, 0]
           }
         },
         vAxis: {
-          title: 'Rating (scale of 1-10)'
+          title: 'kWh',
+		  viewWindow: {
+			  min: 0
+		  }
         }
       };
 
       var chart = new google.visualization.ColumnChart(document.getElementById('chart_div'));
       chart.draw(data, options);
     }
+//]]> 
 </script>
 `
