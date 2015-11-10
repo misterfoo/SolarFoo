@@ -20,9 +20,9 @@ func init() {
 }
 
 type DataPoint struct {
-	time time.Time
+	time      time.Time
 	generated float64
-	used float64
+	used      float64
 }
 
 // ByTime implements sort.Interface for []DataPoint based on the 'time' field.
@@ -40,7 +40,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.URL.Query()["email"]; ok {
 		email = true
 	}
-	
+
 	w.Header().Set("Content-Type", "text/html")
 	output := new(bytes.Buffer)
 	fmt.Fprintf(output, "<style type='text/css'>p { font-family: arial; }</style>")
@@ -48,8 +48,8 @@ func report(w http.ResponseWriter, r *http.Request) {
 
 	// Get the timestamp of midnight today, so we can calculate the energy used yesterday
 	year, month, day := time.Now().Date()
-	midnight := time.Date( year, month, day, 0, 0, 0, 0, time.Local )
-	startTime := strconv.Itoa( int(midnight.Unix()) )
+	midnight := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+	startTime := strconv.Itoa(int(midnight.Unix()))
 
 	// Generate the usage report
 	client := urlfetch.Client(c)
@@ -60,7 +60,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read all the points from the API query
-	totals, points := readValues(w, resp)	
+	totals, points := readValues(w, resp)
 	sort.Sort(ByTime(points))
 	for _, point := range points {
 		fmt.Fprintf(output, "%v: %.2f, %.2f<br/>\n", point.time, point.used, point.generated)
@@ -71,26 +71,27 @@ func report(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(output, "Generated: %.2f<br/>\n", totals.generated)
 
 	// Generate the chart form of the results
-	code := strings.Replace(chartCode, "$(points)", "foo", 1)	
+	code := strings.Replace(chartCode, "$(points)", "foo", 1)
 	fmt.Fprint(output, code)
 
+	// Finish the output form.
 	fmt.Fprint(output, "</p>")
 
-	final := output.String();
+	final := output.String()
 
 	// Where should the output go?
-	if( email ) {
-		msg := &mail.Message {
-			Sender:  "charles.nevill@gmail.com",
-			To:      []string{"charles.nevill@gmail.com"},
-			Subject: "eGauge daily summary",
-			Body:    "yar",
+	if email {
+		msg := &mail.Message{
+			Sender:   "charles.nevill@gmail.com",
+			To:       []string{"charles.nevill@gmail.com"},
+			Subject:  "eGauge daily summary",
+			Body:     "yar",
 			HTMLBody: output.String(),
 		}
 		if err := mail.Send(c, msg); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		
+
 		fmt.Fprintf(w, "Wrote %v bytes of HTML to email", len(msg.HTMLBody))
 	} else {
 		// Write the content to the browser
@@ -106,7 +107,7 @@ func readValues(w http.ResponseWriter, resp *http.Response) (DataPoint, []DataPo
 	reader := csv.NewReader(resp.Body)
 	reader.FieldsPerRecord = 6
 	for i := 0; ; i++ {
- 		record, err := reader.Read()
+		record, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
@@ -115,17 +116,17 @@ func readValues(w http.ResponseWriter, resp *http.Response) (DataPoint, []DataPo
 			break
 		}
 
-		if( i == 0 ) {
-			continue;
+		if i == 0 {
+			continue
 		}
 
-		ts, _ := strconv.Atoi( record[0] )
-		timestamp := time.Unix( int64(ts), 0 )
+		ts, _ := strconv.Atoi(record[0])
+		timestamp := time.Unix(int64(ts), 0)
 
-		u, _ := strconv.ParseFloat( record[1], 32 )
-		g, _ := strconv.ParseFloat( record[2], 32 )
+		u, _ := strconv.ParseFloat(record[1], 32)
+		g, _ := strconv.ParseFloat(record[2], 32)
 
-		points = append(points, DataPoint{ time: timestamp, used: u, generated: g })
+		points = append(points, DataPoint{time: timestamp, used: u, generated: g})
 		totals.used += u
 		totals.generated += g
 	}
