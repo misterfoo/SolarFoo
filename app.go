@@ -51,9 +51,15 @@ func report(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(output, "<style type='text/css'>p { font-family: arial; }</style>")
 	fmt.Fprint(output, "<p align='center'>")
 
+	// Figure out the desired time zone for presenting results.
+	zone, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		zone = time.FixedZone("Austin", -6 * 60 * 60)
+	}
+
 	// Get the timestamp of midnight today, so we can calculate the energy used yesterday
-	year, month, day := time.Now().Date()
-	midnight := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+	year, month, day := time.Now().In(zone).Date()
+	midnight := time.Date(year, month, day, 0, 0, 0, 0, zone)
 	startTime := strconv.Itoa(int(midnight.Unix()))
 
 	// Generate the usage report
@@ -65,7 +71,8 @@ func report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read all the points from eGauge and print the header
-	totals, points := readValues(w, resp)
+	totals, points := readValues(w, resp, zone)
+	fmt.Fprintf(output, "Report for: %v<br/>\n", midnight.Format("2006 Jan 2"))
 	fmt.Fprintf(output, "Used: %.2f kWh<br/>\n", totals.used)
 	fmt.Fprintf(output, "Generated: %.2f kWh<br/>\n", totals.generated)
 	fmt.Fprintf(output, "<a href='%v'>Full Report</a><br/>\n", bareUrl)
@@ -77,7 +84,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 	jsonPoints := new(bytes.Buffer)
 	details := new(bytes.Buffer)
 	for _, point := range points {
-		fmt.Fprintf(details, "%v: %.2f, %.2f<br/>\n", point.time.Format("2006 Jan 2 15:04"), point.used, point.generated)
+		fmt.Fprintf(details, "%v: %.2f, %.2f<br/>\n", point.time.Format("15:04"), point.used, point.generated)
 		fmt.Fprintf(jsonPoints, "[{v: [%v, 0, 0], f: '%v'}, %v, %v],\n",
 			point.time.Hour(), point.time.Format("03:04"), point.used, point.generated)
 	}
@@ -89,7 +96,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 
 	// Write the full details.
 	fmt.Fprint(output, "<p align='center'>")
-	fmt.Fprint(output, "Details by hour:<br/>\n")
+	fmt.Fprint(output, "Details:<br/>\n")
 	fmt.Fprint(output, details.String())
 	fmt.Fprint(output, "</p>")
 
@@ -119,12 +126,12 @@ func report(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reads the raw point data from the eGauge API into a set of DataPoint structures and a 'totals' structure
-func readValues(w http.ResponseWriter, resp *http.Response) (DataPoint, []DataPoint) {
+func readValues(w http.ResponseWriter, resp *http.Response, zone *time.Location) (DataPoint, []DataPoint) {
 
 	var totals DataPoint
 	points := make([]DataPoint, 0, 100)
-	zone := time.FixedZone("Austin", -6 * 60 * 60)
 
+	// Read all of the points we got from the server.
 	reader := csv.NewReader(resp.Body)
 	reader.FieldsPerRecord = 6
 	for i := 0; ; i++ {
