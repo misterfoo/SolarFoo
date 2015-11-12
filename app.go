@@ -57,14 +57,21 @@ func report(w http.ResponseWriter, r *http.Request) {
 		zone = time.FixedZone("Austin", -6 * 60 * 60)
 	}
 
-	// Get the timestamp of midnight today, so we can calculate the energy used yesterday
+	// Get the timestamp of the beginning of today, so we can calculate the energy used yesterday.
+	// This will be passed as the "first" value to the eGauge API, but since the API returns
+	// rows in reverse chronological order (newest to oldest), we'll get the data from a 24
+	// hour period *ending* at this time.
 	year, month, day := time.Now().In(zone).Date()
-	midnight := time.Date(year, month, day, 0, 0, 0, 0, zone)
-	startTime := strconv.Itoa(int(midnight.Unix()))
+	startOfToday := time.Date(year, month, day, 0, 0, 0, 0, zone)
+	firstRowToQuery := strconv.Itoa(int(startOfToday.Unix()))
+
+	// Compute the start of the actual day we're reporting on.
+	oneDay, _ := time.ParseDuration("-24h");
+	actualDayOfReport := startOfToday.Add(oneDay)
 
 	// Generate the usage report
 	client := urlfetch.Client(c)
-	resp, err := client.Get("http://egauge15255.egaug.es/cgi-bin/egauge-show?h&n=24&a&C&c&f=" + startTime)
+	resp, err := client.Get("http://egauge15255.egaug.es/cgi-bin/egauge-show?h&n=24&a&C&c&f=" + firstRowToQuery)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -72,7 +79,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 
 	// Read all the points from eGauge and print the header
 	totals, points := readValues(w, resp, zone)
-	fmt.Fprintf(output, "Report for: %v<br/>\n", midnight.Format("2006 Jan 2"))
+	fmt.Fprintf(output, "Report for: %v<br/>\n", actualDayOfReport.Format("2006 Jan 2"))
 	fmt.Fprintf(output, "Used: %.2f kWh<br/>\n", totals.used)
 	fmt.Fprintf(output, "Generated: %.2f kWh<br/>\n", totals.generated)
 	fmt.Fprintf(output, "<a href='%v'>Full Report</a><br/>\n", bareUrl)
