@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -48,7 +49,7 @@ func report(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	output := new(bytes.Buffer)
 	fmt.Fprint(output, "<html><body>")
-	fmt.Fprintf(output, "<style type='text/css'>p { font-family: arial; }</style>")
+	fmt.Fprintf(output, "<style type='text/css'>%v</style>", pageStyle)
 	fmt.Fprint(output, "<p align='center'>")
 
 	// Figure out the desired time zone for presenting results.
@@ -91,7 +92,8 @@ func report(w http.ResponseWriter, r *http.Request) {
 	jsonPoints := new(bytes.Buffer)
 	details := new(bytes.Buffer)
 	for _, point := range points {
-		fmt.Fprintf(details, "%v: %.2f, %.2f<br/>\n", point.time.Format("15:04"), point.used, point.generated)
+		fmt.Fprintf(details, "<tr><td>%v</td><td>%.2f kWh</td><td>%.2f kWh</td></tr>\n",
+			point.time.Format("15:04"), point.used, point.generated)
 		fmt.Fprintf(jsonPoints, "[{v: [%v, 0, 0], f: '%v'}, %v, %v],\n",
 			point.time.Hour(), point.time.Format("03:04"), point.used, point.generated)
 	}
@@ -103,9 +105,10 @@ func report(w http.ResponseWriter, r *http.Request) {
 
 	// Write the full details.
 	fmt.Fprint(output, "<p align='center'>")
-	fmt.Fprint(output, "Details:<br/>\n")
+	fmt.Fprint(output, "Details<br/>\n")
+	fmt.Fprint(output, "<table><tr><th class='details'>Time</th><th class='details'>Used</th><th class='details'>Generated</th></tr>\n")
 	fmt.Fprint(output, details.String())
-	fmt.Fprint(output, "</p>")
+	fmt.Fprint(output, "</table>")
 
 	// Finish the output.
 	fmt.Fprint(output, "</body></html>")
@@ -159,7 +162,9 @@ func readValues(w http.ResponseWriter, resp *http.Response, zone *time.Location)
 		timestamp := time.Unix(int64(ts), 0).In(zone)
 
 		u, _ := strconv.ParseFloat(record[1], 32)
+		u = math.Max(u, 0)
 		g, _ := strconv.ParseFloat(record[2], 32)
+		g = math.Max(g, 0)
 
 		points = append(points, DataPoint{time: timestamp, used: u, generated: g})
 		totals.used += u
@@ -168,6 +173,20 @@ func readValues(w http.ResponseWriter, resp *http.Response, zone *time.Location)
 
 	return totals, points
 }
+
+const pageStyle = `
+	p {
+		font-family: arial;
+	}
+
+	table, th, td {
+		text-align: center;
+	}
+
+	th.details {
+		width: 110;
+	}
+`
 
 const chartCode = `
   <script type="text/javascript" src="https://www.google.com/jsapi"></script>
