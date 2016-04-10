@@ -111,8 +111,16 @@ func report(w http.ResponseWriter, r *http.Request) {
 	jsonPoints := new(bytes.Buffer)
 	details := new(bytes.Buffer)
 	for _, point := range points {
-		fmt.Fprintf(details, "<tr><td>%v</td><td>%.2f kWh</td><td>%.2f kWh</td></tr>\n",
-			point.time.Format("15:04"), point.used, point.generated)
+		// From white to full red
+		usedColor := 255 - (math.Min( point.used / 5, 1 ) * 255)
+		usedColorCss := fmt.Sprintf("#ff%2x%2x", int(usedColor), int(usedColor))
+
+		// From white to full green
+		genColor := 255 - (math.Min( point.generated / 5, 1 ) * 255)
+		genColorCss := fmt.Sprintf("#%2xff%2x", int(genColor), int(genColor))
+
+		fmt.Fprintf(details, "<tr><td>%v</td><td bgcolor='%v'>%.2f kWh</td><td bgcolor='%v'>%.2f kWh</td></tr>\n",
+			point.time.Format("15:04"), usedColorCss, point.used, genColorCss, point.generated)
 		fmt.Fprintf(jsonPoints, "[{v: [%v, 0, 0], f: '%v'}, %v, %v],\n",
 			point.time.Hour(), point.time.Format("03:04"), point.used, point.generated)
 	}
@@ -125,9 +133,11 @@ func report(w http.ResponseWriter, r *http.Request) {
 	// Write the full details.
 	fmt.Fprint(output, "<p align='center'>")
 	fmt.Fprint(output, "Details<br/>\n")
+	fmt.Fprint(output, "<center>\n")
 	fmt.Fprint(output, "<table><tr><th class='details'>Time</th><th class='details'>Used</th><th class='details'>Generated</th></tr>\n")
 	fmt.Fprint(output, details.String())
-	fmt.Fprint(output, "</table>")
+	fmt.Fprint(output, "</table>\n")
+	fmt.Fprint(output, "</center>\n")
 
 	// Finish the output.
 	fmt.Fprint(output, "</body></html>")
@@ -197,7 +207,7 @@ func readValues(w http.ResponseWriter, resp *http.Response, zone *time.Location)
 }
 
 const pageStyle = `
-	p {
+	p, center {
 		font-family: arial;
 	}
 
@@ -230,7 +240,7 @@ function drawColColors() {
 
       var options = {
         title: 'Usage and Solar Generation',
-        colors: ['#9575cd', '#33ac71'],
+        colors: ['#ee0000', '#00dd00'],
 		chartArea: {width:'80%',height:100},
         hAxis: {
           title: 'Time of Day',
