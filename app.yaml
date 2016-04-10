@@ -1,4 +1,4 @@
-application: solarfoo
+application: symbolic-cinema-108018
 version: 1
 runtime: go
 api_version: go1

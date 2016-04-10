@@ -83,7 +83,6 @@ func report(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(output, "Report for: %v<br/>\n", actualDayOfReport.Format("2006 Jan 2"))
 	fmt.Fprintf(output, "Used: %.2f kWh<br/>\n", totals.used)
 	fmt.Fprintf(output, "Generated: %.2f kWh<br/>\n", totals.generated)
-	fmt.Fprintf(output, "<a href='%v'>Full Report</a><br/>\n", bareUrl)
 	fmt.Fprint(output, "<br/>")
 	fmt.Fprint(output, "</p>")
 
@@ -121,14 +120,15 @@ func report(w http.ResponseWriter, r *http.Request) {
 			Sender:   "charles.nevill@gmail.com",
 			To:       []string{"charles.nevill@gmail.com"},
 			Subject:  "eGauge daily summary",
-			Body:     "yar",
+			Body:     "yar!",
 			HTMLBody: output.String(),
 		}
 		if err := mail.Send(c, msg); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		fmt.Fprintf(w, "Wrote %v bytes of HTML to email", len(msg.HTMLBody))
+		fmt.Fprintf(w, "Wrote %v bytes HTML email:", len(msg.HTMLBody))
+        fmt.Fprint(w, msg.HTMLBody)
 	} else {
 		// Write the content to the browser
 		fmt.Fprint(w, final)
