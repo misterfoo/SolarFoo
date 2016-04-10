@@ -2,8 +2,8 @@ package SolarFoo
 
 import (
 	"appengine"
-	"appengine/mail"
 	"appengine/urlfetch"
+    "github.com/sendgrid/sendgrid-go"
 	"bytes"
 	"encoding/csv"
 	"fmt"
@@ -14,10 +14,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"keys" // this is a local package not stored in Git
 )
 
 func init() {
 	http.HandleFunc("/report", report)
+	http.HandleFunc("/emailTest", emailTest)
 }
 
 type DataPoint struct {
@@ -32,6 +34,24 @@ type ByTime []DataPoint
 func (a ByTime) Len() int           { return len(a) }
 func (a ByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByTime) Less(i, j int) bool { return a[i].time.Before(a[j].time) }
+
+// Tests email functionality
+func emailTest(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+    sg := sendgrid.NewSendGridClientWithApiKey(keys.SendGridApi)
+    sg.Client = urlfetch.Client(ctx)
+
+    message := sendgrid.NewMail()
+    message.AddTo("charles.nevill@gmail.com")
+    message.SetSubject("Email From SendGrid")
+    message.SetHTML("Through AppEngine")
+    message.SetFrom("charles.nevill@gmail.com")
+    if err := sg.Send(message); err == nil {
+		fmt.Fprint(w, "yup!")
+	} else {
+		fmt.Fprintf(w, "sad panda: %v", err)
+	}
+}
 
 func report(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
@@ -116,19 +136,21 @@ func report(w http.ResponseWriter, r *http.Request) {
 
 	// Where should the output go?
 	if email {
-		msg := &mail.Message{
-			Sender:   "charles.nevill@gmail.com",
-			To:       []string{"charles.nevill@gmail.com"},
-			Subject:  "eGauge daily summary",
-			Body:     "yar!",
-			HTMLBody: output.String(),
-		}
-		if err := mail.Send(c, msg); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		sg := sendgrid.NewSendGridClientWithApiKey(keys.SendGridApi)
+		sg.Client = urlfetch.Client(c)
 
-		fmt.Fprintf(w, "Wrote %v bytes HTML email:", len(msg.HTMLBody))
-        fmt.Fprint(w, msg.HTMLBody)
+		body := output.String()
+		msg := sendgrid.NewMail()
+		msg.SetFrom("charles.nevill@gmail.com")
+		msg.AddTo("charles.nevill@gmail.com")
+		msg.SetSubject("eGauge daily summary")
+		msg.SetHTML(body)
+		if err := sg.Send(msg); err == nil {
+			fmt.Fprintf(w, "Wrote %v bytes HTML email:", len(body))
+	        fmt.Fprint(w, body)
+		} else {
+			fmt.Fprintf(w, "sad panda: %v", err)
+		}
 	} else {
 		// Write the content to the browser
 		fmt.Fprint(w, final)
